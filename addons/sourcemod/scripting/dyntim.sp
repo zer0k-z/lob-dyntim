@@ -12,10 +12,10 @@
 public Plugin myinfo =
 {
     name = "DynTim for GOKZ",
-    author = "Walliski",
+    author = "Walliski, zer0.k",
     description = "Dynamic Timelimit based on average map completion time.",
-    version = "1.1.0",
-    url = "https://github.com/walliski/dyntim-for-gokz"
+    version = "1.1.0-LoB1",
+    url = "https://github.com/zer0k-z/lob-dyntim/"
 };
 
 Database gH_DB = null;
@@ -26,6 +26,7 @@ public void OnPluginStart()
 }
 
 ConVar gCV_dyntim_timelimit_min;
+ConVar gCV_dyntim_timelimit_default;
 ConVar gCV_dyntim_timelimit_max;
 ConVar gCV_dyntim_multiplier;
 
@@ -35,7 +36,8 @@ void CreateConVars()
     AutoExecConfig_SetCreateFile(true);
 
     gCV_dyntim_timelimit_min = AutoExecConfig_CreateConVar("dyntim_timelimit_min", "15", "If calculated timelimit is smaller than this, use this value instead. (Minutes)", _, true, 0.0);
-    gCV_dyntim_timelimit_max = AutoExecConfig_CreateConVar("dyntim_timelimit_max", "180", "If calculated timelimit is bigger than this, use this value instead. (Minutes)", _, true, 0.0);
+    gCV_dyntim_timelimit_default = AutoExecConfig_CreateConVar("dyntim_timelimit_default", "25", "Default timelimit if there is no calculated timelimit. (Minutes)", _, true, 0.0);
+    gCV_dyntim_timelimit_max = AutoExecConfig_CreateConVar("dyntim_timelimit_max", "120", "If calculated timelimit is bigger than this, use this value instead. (Minutes)", _, true, 0.0);
     gCV_dyntim_multiplier = AutoExecConfig_CreateConVar("dyntim_multiplier", "1.0", "Multiply the resulting timelimit with this, before checking min and max values.");
 
     AutoExecConfig_ExecuteFile();
@@ -87,45 +89,33 @@ void DB_TxnSuccess_SetDynamicTimelimit(Handle db, DataPack data, int numQueries,
     {
         return;
     }
+    float timeLimit;
 
     int mapCompletions = SQL_FetchInt(results[0], 1);
     if (mapCompletions < 5) // We dont want to base the avg time on too few times.
     {
-        return;
+        timeLimit = gCV_dyntim_timelimit_default.FloatValue;
+    }
+    else
+    {
+        // DB has the times in ms. We convert it to minutes.
+        float averageTime = SQL_FetchInt(results[0], 0) / 1000.0 / 60.0;
+        timeLimit = (averageTime + 10) * gCV_dyntim_multiplier.FloatValue;
     }
 
-    // DB has the times in ms. We convert it to seconds.
-    int averageTime = RoundToNearest(SQL_FetchInt(results[0], 0) / 1000.0);
-
-    int newTime = 0;
-
-    // Do some magic scaling for lower numbers:
-    if (averageTime <= 60) newTime = averageTime * 16;
-    else if (averageTime <= 90) newTime = averageTime * 12;
-    else if (averageTime <= 120) newTime = averageTime * 10;
-    else if (averageTime <= 150) newTime = averageTime * 9;
-    else if (averageTime <= 180) newTime = averageTime * 7;
-    else if (averageTime <= 300) newTime = averageTime * 6;
-    else if (averageTime <= 360) newTime = averageTime * 5;
-    else if (averageTime <= 420) newTime = averageTime * 4;
-    else newTime = averageTime * 3;
-
-    int newTimeMinutes = RoundToNearest((newTime * gCV_dyntim_multiplier.FloatValue)/60.0);
-
     // Make sure the values are not too high or low.
-    int min = gCV_dyntim_timelimit_min.IntValue;
-    int max = gCV_dyntim_timelimit_max.IntValue;
-    newTimeMinutes = newTimeMinutes < min ? min : newTimeMinutes;
-    newTimeMinutes = newTimeMinutes > max ? max : newTimeMinutes;
-
-    // Roundtime cannot be over 60 minutes.
-    int roundTime = newTimeMinutes > 60 ? 60 : newTimeMinutes;
+    float min = gCV_dyntim_timelimit_min.FloatValue;
+    float max = gCV_dyntim_timelimit_max.FloatValue;
+    timeLimit = timeLimit < min ? min : timeLimit;
+    timeLimit = timeLimit > max ? max : timeLimit;
+    // Unlock roundtime's 60 minutes upper cap.
+    SetConVarBounds(FindConVar("mp_roundtime"), ConVarBound_Upper, true, gCV_dyntim_timelimit_max.FloatValue);
 
     char buffer[32];
-    Format(buffer, sizeof(buffer), "mp_timelimit %i", newTimeMinutes);
+    Format(buffer, sizeof(buffer), "mp_timelimit %f", timeLimit);
     ServerCommand(buffer);
 
-    Format(buffer, sizeof(buffer), "mp_roundtime %i", roundTime);
+    Format(buffer, sizeof(buffer), "mp_roundtime %f", timeLimit);
     ServerCommand(buffer);
     ServerCommand("mp_restartgame 1"); // Need to restart for Roundtime to take place.
 }
