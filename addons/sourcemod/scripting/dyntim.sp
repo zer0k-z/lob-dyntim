@@ -14,21 +14,21 @@ public Plugin myinfo =
     name = "DynTim for GOKZ",
     author = "Walliski, zer0.k",
     description = "Dynamic Timelimit based on average map completion time.",
-    version = "1.1.0-LoB1",
+    version = "1.1.0-LoB1.1",
     url = "https://github.com/zer0k-z/lob-dyntim/"
 };
 
 Database gH_DB = null;
-
-public void OnPluginStart()
-{
-    CreateConVars();
-}
-
 ConVar gCV_dyntim_timelimit_min;
 ConVar gCV_dyntim_timelimit_default;
 ConVar gCV_dyntim_timelimit_max;
 ConVar gCV_dyntim_multiplier;
+
+public void OnPluginStart()
+{
+    CreateConVars();
+    HookConVarChange(FindConVar("mp_roundtime"), OnRoundTimeChanged);
+}
 
 void CreateConVars()
 {
@@ -52,6 +52,12 @@ public void OnAllPluginsLoaded()
 public void GOKZ_DB_OnDatabaseConnect(DatabaseType DBType)
 {
     gH_DB = GOKZ_DB_GetDatabase();
+}
+
+public void OnRoundTimeChanged(ConVar roundTime, const char[] oldValue, const char[] newValue)
+{
+    int newRoundTime = RoundToNearest(StringToFloat(newValue) * 60);
+    GameRules_SetProp("m_iRoundTime", newRoundTime);
 }
 
 // SQL for getting average PB time, taken from GOKZ LocalRanks plugin.
