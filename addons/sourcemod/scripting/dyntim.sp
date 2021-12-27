@@ -27,7 +27,7 @@ ConVar gCV_dyntim_multiplier;
 public void OnPluginStart()
 {
     CreateConVars();
-    HookConVarChange(FindConVar("mp_roundtime"), OnRoundTimeChanged);
+    HookConVarChange(FindConVar("mp_timelimit"), OnTimeLimitChanged);
 }
 
 void CreateConVars()
@@ -54,10 +54,11 @@ public void GOKZ_DB_OnDatabaseConnect(DatabaseType DBType)
     gH_DB = GOKZ_DB_GetDatabase();
 }
 
-public void OnRoundTimeChanged(ConVar roundTime, const char[] oldValue, const char[] newValue)
+public void OnTimeLimitChanged(ConVar timeLimit, const char[] oldValue, const char[] newValue)
 {
     int newRoundTime = RoundToNearest(StringToFloat(newValue) * 60);
     GameRules_SetProp("m_iRoundTime", newRoundTime);
+    FindConVar("mp_roundtime").SetFloat(timeLimit.FloatValue);
 }
 
 // SQL for getting average PB time, taken from GOKZ LocalRanks plugin.
